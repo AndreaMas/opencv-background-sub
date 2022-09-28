@@ -68,6 +68,7 @@ int UserInputInRange(int min, int max) {
 void SpawnNeededWindows() { 
 	namedWindow("Frame");
 	namedWindow("Foreground Mask");
+	namedWindow("Background");
 }
 
 
@@ -154,14 +155,15 @@ void bg_train(Mat frame, Mat* background) {
 
 
 void bg_update(Mat frame, Mat* background) {
-
+	float alfa = 0.05;
+	*background = alfa * frame + *background * (1.0 - alfa);
 }
 
 void AdaptiveBackground() {
 	Mat frame; //current frame
 	Mat frameGray, bg;
-	Mat D1, b1, motionMask, motionThres;
-	Mat* Pic = new Mat[1000];
+	Mat motionMask, motionThres;
+	//Mat* Pic = new Mat[1000];
 
 	SpawnNeededWindows();
 
@@ -187,11 +189,14 @@ void AdaptiveBackground() {
 		absdiff(bg, frameGray, motionMask);
 		//mask thresholding
 		threshold(motionMask, motionThres, 50, 255, THRESH_BINARY);
+		//set the current frame as background for the next frame
+		bg_update(frameGray, &bg);
 		//get input from keyboard
 		keyboardInput = waitKey(30);
 
 		imshow("Frame", frame);
 		imshow("Foreground Mask", motionMask);
+		imshow("Background", bg);
 	}
 
 	//delete capture object
