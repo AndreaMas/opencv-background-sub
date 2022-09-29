@@ -22,7 +22,7 @@ using namespace cv;
 
 // Global variables
 const int CAMERA_ID = 0;
-const int NUM_FRAMES_DIFFERENCE = 20;
+const int NUM_FRAMES_DIFFERENCE = 5;
 const float LEARNING_RATE_ALPHA = 0.05f;
 const float LEARNING_RATE_MOG = 0.05f;
 
@@ -82,7 +82,7 @@ int UserInputInRange(int min, int max) {
 void FrameDifference() {
 	Mat frame, frameGray;
 	Mat difference, tresholdedDiff;
-	const int arrayTolerance = 80;
+	const int arrayTolerance = 50;
 	const int arrayDim = arrayTolerance + NUM_FRAMES_DIFFERENCE;
 	std::array<Mat, arrayDim> buffer;
 	int keyboardInput = 0;
@@ -110,11 +110,10 @@ void FrameDifference() {
 	// Loop, exit if user press 'esc' or 'q' 
 	while ((char)keyboardInput != 'q' && (char)keyboardInput != 27) {
 
-		capture >> frame; // store frames
+		capture >> frame;
 		
 		cv::cvtColor(frame, frameGray, cv::COLOR_RGB2GRAY);
-
-		buffer.at(currFrame) = frameGray;
+		frameGray.copyTo(buffer.at(currFrame));
 		
 		std::cout << "Current frame -> " << currFrame << std::endl;
 		
@@ -130,7 +129,7 @@ void FrameDifference() {
 			std::cout << "Old frame     -> " << oldFrame << std::endl;
 			cv::imshow("Old Frame", buffer.at(oldFrame));
 
-			cv::absdiff(frameGray, buffer.at(oldFrame), difference); 
+			cv::absdiff(buffer.at(currFrame), buffer.at(oldFrame), difference);
 			//cv::subtract(buffer.at(currFrame), buffer.at(oldFrame), difference); 
 
 			cv::imshow("Difference", difference);
