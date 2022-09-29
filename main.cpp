@@ -22,7 +22,7 @@ using namespace cv;
 
 // Global variables
 const int CAMERA_ID = 0;
-const int NUM_FRAMES_DIFFERENCE = 5;
+const int NUM_FRAMES_DIFFERENCE = 20;
 const float LEARNING_RATE_ALPHA = 0.05f;
 const float LEARNING_RATE_MOG = 0.05f;
 
@@ -82,10 +82,10 @@ int UserInputInRange(int min, int max) {
 void FrameDifference() {
 	Mat frame, frameGray;
 	Mat difference, tresholdedDiff;
-	const int arrayTolerance = 50;
-	const int arrayDim = arrayTolerance + NUM_FRAMES_DIFFERENCE;
-	std::array<Mat, arrayDim> buffer;
+	const int arrayDim = NUM_FRAMES_DIFFERENCE;
+	std::array<Mat, arrayDim> buffer; // TODO: heap alloc may be preferable
 	int keyboardInput = 0;
+	bool isBufferEmpty = true;
 	
 	// Spawn GUI Windows
 	cv::namedWindow("Frame");
@@ -110,46 +110,91 @@ void FrameDifference() {
 	// Loop, exit if user press 'esc' or 'q' 
 	while ((char)keyboardInput != 'q' && (char)keyboardInput != 27) {
 
+		// Display frames index info
+		std::cout << "Current frame -> " << currFrame << std::endl;
+		std::cout << "Old frame     -> " << oldFrame << std::endl;
+
 		capture >> frame;
-		
+
 		cv::cvtColor(frame, frameGray, cv::COLOR_RGB2GRAY);
 		frameGray.copyTo(buffer.at(currFrame));
-		
-		std::cout << "Current frame -> " << currFrame << std::endl;
-		
-		cv::imshow("Frame", buffer.at(currFrame));
 
-		// handle skipping first frames
-		if (currFrame >= NUM_FRAMES_DIFFERENCE) { 
-			
-			// handle buffer as circular
-			if (currFrame >= arrayDim - 1) currFrame = 0;
-			if (oldFrame >= arrayDim - 1) oldFrame = 0;
-
-			std::cout << "Old frame     -> " << oldFrame << std::endl;
-			cv::imshow("Old Frame", buffer.at(oldFrame));
-
-			cv::absdiff(buffer.at(currFrame), buffer.at(oldFrame), difference);
-			//cv::subtract(buffer.at(currFrame), buffer.at(oldFrame), difference); 
-
-			cv::imshow("Difference", difference);
-
-			cv::threshold(difference, tresholdedDiff, 50, 255, cv::THRESH_BINARY);
-
-			//results display
-			cv::imshow("Motion", tresholdedDiff);
-
-			oldFrame++;
-
+		// first frames just fill buffer
+		if (currFrame < (arrayDim - 1) && isBufferEmpty) {
+			currFrame++;
+			keyboardInput = waitKey(30);
+			continue;
 		}
+		isBufferEmpty = false;
+		
+		cv::absdiff(buffer.at(currFrame), buffer.at(oldFrame), difference);
 
+		cv::imshow("Difference", difference);
+
+		cv::threshold(difference, tresholdedDiff, 50, 255, cv::THRESH_BINARY);
+
+		// Display images
+		cv::imshow("Frame", buffer.at(currFrame));
+		cv::imshow("Old Frame", buffer.at(oldFrame));
+		cv::imshow("Motion", tresholdedDiff);
+
+		oldFrame++;
 		currFrame++;
+
+		// handle buffer as circular
+		if (currFrame >= arrayDim - 1) currFrame = 0;
+		if (oldFrame >= arrayDim - 1) oldFrame = 0;
 
 		//get input from keyboard
 		keyboardInput = waitKey(30);
 
 
 	}
+
+
+	//// Loop, exit if user press 'esc' or 'q' 
+	//while ((char)keyboardInput != 'q' && (char)keyboardInput != 27) {
+
+	//	capture >> frame;
+	//	
+	//	cv::cvtColor(frame, frameGray, cv::COLOR_RGB2GRAY);
+	//	frameGray.copyTo(buffer.at(currFrame));
+	//	
+	//	std::cout << "Current frame -> " << currFrame << std::endl;
+	//	
+	//	cv::imshow("Frame", buffer.at(currFrame));
+
+	//	// handle skipping first frames
+	//	if (currFrame >= NUM_FRAMES_DIFFERENCE) { 
+	//		
+	//		// handle buffer as circular
+	//		if (currFrame >= arrayDim - 1) currFrame = 0;
+	//		if (oldFrame >= arrayDim - 1) oldFrame = 0;
+
+	//		std::cout << "Old frame     -> " << oldFrame << std::endl;
+	//		cv::imshow("Old Frame", buffer.at(oldFrame));
+
+	//		cv::absdiff(buffer.at(currFrame), buffer.at(oldFrame), difference);
+	//		//cv::subtract(buffer.at(currFrame), buffer.at(oldFrame), difference); 
+
+	//		cv::imshow("Difference", difference);
+
+	//		cv::threshold(difference, tresholdedDiff, 50, 255, cv::THRESH_BINARY);
+
+	//		//results display
+	//		cv::imshow("Motion", tresholdedDiff);
+
+	//		oldFrame++;
+
+	//	}
+
+	//	currFrame++;
+
+	//	//get input from keyboard
+	//	keyboardInput = waitKey(30);
+
+
+	//}
 
 	
 	capture.release(); //delete capture object
@@ -186,6 +231,9 @@ void AdaptiveBackground() {
 	namedWindow("Frame");
 	namedWindow("Motion Mask");
 	namedWindow("Background");
+	cv::moveWindow("Frame", 100, 100);
+	cv::moveWindow("Motion Mask", 600, 100);
+	cv::moveWindow("Background", 100, 600);
 
 	// Open Webcam
 	VideoCapture capture(0);
@@ -240,6 +288,8 @@ void MixtureOfGaussians() {
 	//create GUI windows
 	namedWindow("Frame");
 	namedWindow("Foreground Mask");
+	cv::moveWindow("Frame", 100, 100);
+	cv::moveWindow("Foreground Mask", 600, 100);
 	//create Background Subtractor objects
 	pMOG2 = createBackgroundSubtractorMOG2(); //MOG2 approach
 	// Open Webcam
