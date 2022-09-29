@@ -11,6 +11,8 @@
 #include <iostream>
 #include <sstream>
 #include <limits>
+#include <vector>
+#include <array>
 //opencv
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/video/background_segm.hpp>
@@ -20,8 +22,10 @@ using namespace cv;
 
 // Global variables
 const int CAMERA_ID = 0;
-const float LEARNING_RATE_MOG = 0.05f;
+const int NUM_FRAMES_DIFFERENCE = 20;
 const float LEARNING_RATE_ALPHA = 0.05f;
+const float LEARNING_RATE_MOG = 0.05f;
+
 
 
 int UserInputInRange(int,int);
@@ -35,7 +39,7 @@ int main()
 {
 	std::cout <<	 "Background subtractor program awakens ..."	<< std::endl;
 
-	// App main loop
+	// App loop
 	while (true) {
 		std::cout << "Available background subtraction algorithms:" << std::endl;
 		std::cout << "1) frame difference"							<< std::endl;
@@ -53,6 +57,11 @@ int main()
 	return EXIT_SUCCESS;
 }
 
+/*
+************************************************************
+* User Interface
+* **********************************************************
+*/
 
 int UserInputInRange(int min, int max) {
 	int userChoice = 0;
@@ -64,85 +73,95 @@ int UserInputInRange(int min, int max) {
 }
 
 
-//creates needed GUI windows
-void SpawnNeededWindows() { 
-	namedWindow("Frame");
-	namedWindow("Foreground Mask");
-	namedWindow("Background");
-}
-
+/*
+************************************************************
+* Frame Difference
+* **********************************************************
+*/
 
 void FrameDifference() {
-	Mat frame; //current frame
-	Mat frameGray, bg;
-	Mat D1, b1, motionMask;
-	Mat* Pic = new Mat[1000];
+	Mat frame, frameGray;
+	Mat difference, tresholdedDiff;
+	const int vectorCapacity = 100;
+	std::array<Mat, vectorCapacity> buffer;
+	//buffer.reserve(vectorCapacity);
 	int keyboardInput = 0;
 	
-	SpawnNeededWindows();
+	// Spawn GUI Windows
+	cv::namedWindow("Frame");
+	cv::namedWindow("Old Frame");
+	cv::namedWindow("Difference");
+	cv::namedWindow("Motion");
+	cv::moveWindow("Frame", 100, 100);
+	cv::moveWindow("Old Frame", 600, 100);
+	cv::moveWindow("Difference", 100, 600);
+	cv::moveWindow("Motion", 600, 600);
 
-	VideoCapture capture(0); // Open Webcam
+	// Open Webcam
+	VideoCapture capture(0); 
 	if (!capture.isOpened()) {
 		std::cerr << "[FAIL] Cannot open webcam." << std::endl;
 		exit(EXIT_FAILURE);
 	}
 
-	const unsigned int frameGap = 3;
-
-	unsigned int currFrame = frameGap;
+	unsigned int currFrame = 0;
 	unsigned int oldFrame = 0;
 
 	// Loop, exit if user press 'esc' or 'q' 
 	while ((char)keyboardInput != 'q' && (char)keyboardInput != 27) {
 
 		capture >> frame; // store frames
+		
+		cv::cvtColor(frame, frameGray, cv::COLOR_RGB2GRAY);
 
-		// handle skipping first frames & int overflow
-		if (currFrame < frameGap) { continue;}
-		if (currFrame == UINT_MAX) {
+		buffer.at(currFrame) = frameGray;
+		
+		std::cout << "Current frame -> " << currFrame << std::endl;
+		
+		cv::imshow("Frame", buffer.at(currFrame));
 
-		}
+		// handle skipping first frames
+		if (currFrame >= NUM_FRAMES_DIFFERENCE) { 
+			
+			// handle buffer as circular
+			if (currFrame >= vectorCapacity - 1) currFrame = 0;
+			if (oldFrame >= vectorCapacity - 1) oldFrame = 0;
 
-		// handle int overflow
-		//if currFrame ==
+			std::cout << "Old frame     -> " << oldFrame << std::endl;
+			cv::imshow("Old Frame", buffer.at(oldFrame));
 
+			cv::absdiff(buffer.at(currFrame), buffer.at(oldFrame), difference);
 
+			cv::imshow("Difference", difference);
 
-		cvtColor(frame, frameGray, cv::COLOR_RGB2GRAY);
-
-		frameGray.copyTo(Pic[currFrame]);
-		currFrame++;
-		oldFrame++;
-
-		if (currFrame == 0) {
-			currFrame = 3;
-		}
-
-		if (currFrame > oldFrame) //need at least 3 frame (for 3-frame difference)
-		{
-
-			absdiff(Pic[currFrame], Pic[oldFrame], D1);
-
-			//mask thresholding
-			threshold(D1, b1, 50, 255, THRESH_BINARY);
-
-			motionMask = b1;
+			cv::threshold(difference, tresholdedDiff, 50, 255, cv::THRESH_BINARY);
 
 			//results display
-			cv::imshow("Frame", Pic[currFrame]);
-			cv::imshow("Foreground Mask", motionMask);
+			cv::imshow("Motion", tresholdedDiff);
 
-			waitKey(30);
+			oldFrame++;
+
 		}
+
+		currFrame++;
 
 		//get input from keyboard
 		keyboardInput = waitKey(30);
+
+
 	}
 
 	
 	capture.release(); //delete capture object
 	cv::destroyAllWindows(); //destroy GUI windows
 }
+
+
+/*
+************************************************************
+* Adaptive Background
+* **********************************************************
+*/
 
 static int ctr = 1;
 void bg_train(Mat frame, Mat* background) {
@@ -155,17 +174,18 @@ void bg_train(Mat frame, Mat* background) {
 
 
 void bg_update(Mat frame, Mat* background) {
-	float alfa = 0.05;
-	*background = alfa * frame + *background * (1.0 - alfa);
+	*background = LEARNING_RATE_ALPHA * frame + *background * (1.0f - LEARNING_RATE_ALPHA);
 }
 
 void AdaptiveBackground() {
 	Mat frame; //current frame
 	Mat frameGray, bg;
 	Mat motionMask, motionThres;
-	//Mat* Pic = new Mat[1000];
 
-	SpawnNeededWindows();
+	//create GUI windows
+	namedWindow("Frame");
+	namedWindow("Motion Mask");
+	namedWindow("Background");
 
 	// Open Webcam
 	VideoCapture capture(0);
@@ -195,7 +215,7 @@ void AdaptiveBackground() {
 		keyboardInput = waitKey(30);
 
 		imshow("Frame", frame);
-		imshow("Foreground Mask", motionMask);
+		imshow("Motion Mask", motionMask);
 		imshow("Background", bg);
 	}
 
@@ -206,6 +226,12 @@ void AdaptiveBackground() {
 	destroyAllWindows();
 }
 
+
+/*
+************************************************************
+* Mixture Of Gaussians (MOG2)
+* **********************************************************
+*/
 
 void MixtureOfGaussians() {
 	Mat frame; //current frame
