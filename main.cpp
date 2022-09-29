@@ -82,9 +82,9 @@ int UserInputInRange(int min, int max) {
 void FrameDifference() {
 	Mat frame, frameGray;
 	Mat difference, tresholdedDiff;
-	const int vectorCapacity = 100;
-	std::array<Mat, vectorCapacity> buffer;
-	//buffer.reserve(vectorCapacity);
+	const int arrayTolerance = 80;
+	const int arrayDim = arrayTolerance + NUM_FRAMES_DIFFERENCE;
+	std::array<Mat, arrayDim> buffer;
 	int keyboardInput = 0;
 	
 	// Spawn GUI Windows
@@ -124,13 +124,14 @@ void FrameDifference() {
 		if (currFrame >= NUM_FRAMES_DIFFERENCE) { 
 			
 			// handle buffer as circular
-			if (currFrame >= vectorCapacity - 1) currFrame = 0;
-			if (oldFrame >= vectorCapacity - 1) oldFrame = 0;
+			if (currFrame >= arrayDim - 1) currFrame = 0;
+			if (oldFrame >= arrayDim - 1) oldFrame = 0;
 
 			std::cout << "Old frame     -> " << oldFrame << std::endl;
 			cv::imshow("Old Frame", buffer.at(oldFrame));
 
-			cv::absdiff(buffer.at(currFrame), buffer.at(oldFrame), difference);
+			cv::absdiff(frameGray, buffer.at(oldFrame), difference); 
+			//cv::subtract(buffer.at(currFrame), buffer.at(oldFrame), difference); 
 
 			cv::imshow("Difference", difference);
 
